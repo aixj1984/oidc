@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/zitadel/oidc/v3/example/server/config"
 	"github.com/zitadel/oidc/v3/example/server/exampleop"
 	"github.com/zitadel/oidc/v3/example/server/storage"
@@ -27,7 +29,6 @@ func main() {
 		}),
 	)
 
-	//which gives us the issuer: http://localhost:9998/
 	issuer := fmt.Sprintf("http://localhost:%s/", cfg.Port)
 
 	storage.RegisterClients(
@@ -36,22 +37,39 @@ func main() {
 		storage.WebClient("api", "secret", cfg.RedirectURI...),
 	)
 
-	// the OpenIDProvider interface needs a Storage interface handling various checks and state manipulations
-	// this might be the layer for accessing your database
-	// in this example it will be handled in-memory
 	store, err := getUserStore(cfg)
 	if err != nil {
 		logger.Error("cannot create UserStore", "error", err)
 		os.Exit(1)
 	}
 
-	stor := storage.NewStorage(store)
+	var stor exampleop.Storage
+
+	storageType := os.Getenv("STORAGE_TYPE")
+	switch storageType {
+	case "redis":
+		redisAddr := os.Getenv("REDIS_ADDR")
+		if redisAddr == "" {
+			redisAddr = "localhost:6379"
+		}
+		redisPassword := os.Getenv("REDIS_PASSWORD")
+		rdb := redis.NewClient(&redis.Options{
+			Addr:     redisAddr,
+			Password: redisPassword,
+			DB:       10,
+		})
+		stor = storage.NewRedisStorage(rdb, store, "oidc:")
+		logger.Info("using Redis storage", "addr", redisAddr)
+	default:
+		stor = storage.NewStorage(store)
+		logger.Info("using in-memory storage")
+	}
+
 	router := exampleop.SetupServer(
 		issuer,
 		stor,
 		logger,
 		false,
-		//op.WithCrypto(newMyCrypto(sha256.Sum256([]byte("test")), logger)),
 	)
 
 	server := &http.Server{

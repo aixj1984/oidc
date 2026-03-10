@@ -4,7 +4,7 @@
 $env:CLIENT_ID = "web"
 $env:CLIENT_SECRET = "secret"
 $env:ISSUER = "http://localhost:9998/"
-$env:SCOPES = "openid profile"
+$env:SCOPES = "openid profile offline_access"
 $env:PORT = "9999"
 
 app.exe
