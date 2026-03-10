@@ -23,8 +23,9 @@ import (
 )
 
 var (
-	callbackPath = "/auth/callback"
-	key          = []byte("test1234test1234")
+	callbackPath   = "/auth/callback"
+	loggedOutPath  = "/logged-out"
+	key            = []byte("test1234test1234")
 )
 
 func main() {
@@ -116,11 +117,16 @@ func main() {
 		urlOptions...,
 	))
 
+	// store the latest ID token so it can be used as id_token_hint in the logout request
+	var latestIDToken atomic.Value
+
 	// for demonstration purposes the returned userinfo response is written as JSON object onto response
 	marshalUserinfo := func(w http.ResponseWriter, r *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, rp rp.RelyingParty, info *oidc.UserInfo) {
 		fmt.Println("access token", tokens.AccessToken)
 		fmt.Println("refresh token", tokens.RefreshToken)
 		fmt.Println("id token", tokens.IDToken)
+
+		latestIDToken.Store(tokens.IDToken)
 
 		data, err := json.Marshal(info)
 		if err != nil {
@@ -177,6 +183,23 @@ func main() {
 	// if you would use the callback without calling the userinfo endpoint, simply switch the callback handler for:
 	//
 	// http.Handle(callbackPath, rp.CodeExchangeHandler(marshalToken, provider))
+
+	postLogoutRedirectURI := fmt.Sprintf("http://localhost:%v%v", port, loggedOutPath)
+
+	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+		idToken, _ := latestIDToken.Load().(string)
+		endSessionURL, err := rp.EndSession(r.Context(), provider, idToken, postLogoutRedirectURI, "", "", nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, endSessionURL.String(), http.StatusFound)
+	})
+
+	http.HandleFunc(loggedOutPath, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "text/html")
+		w.Write([]byte(`<html><body><p>You have been logged out.</p><a href="/login">Login again</a></body></html>`))
+	})
 
 	// simple counter for request IDs
 	var counter atomic.Int64

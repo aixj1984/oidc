@@ -23,6 +23,7 @@ type Client struct {
 	id                             string
 	secret                         string
 	redirectURIs                   []string
+	postLogoutRedirectURIs         []string
 	applicationType                op.ApplicationType
 	authMethod                     oidc.AuthMethod
 	loginURL                       func(string) string
@@ -48,7 +49,7 @@ func (c *Client) RedirectURIs() []string {
 
 // PostLogoutRedirectURIs must return the registered post_logout_redirect_uris for sign-outs
 func (c *Client) PostLogoutRedirectURIs() []string {
-	return []string{}
+	return c.postLogoutRedirectURIs
 }
 
 // ApplicationType must return the type of the client (app, native, user agent)
@@ -155,6 +156,7 @@ func NativeClient(id string, redirectURIs ...string) *Client {
 		id:                             id,
 		secret:                         "", // no secret needed (due to PKCE)
 		redirectURIs:                   redirectURIs,
+		postLogoutRedirectURIs:         []string{"http://localhost/logged-out"},
 		applicationType:                op.ApplicationTypeNative,
 		authMethod:                     oidc.AuthMethodNone,
 		loginURL:                       defaultLoginURL,
@@ -181,6 +183,7 @@ func WebClient(id, secret string, redirectURIs ...string) *Client {
 		id:                             id,
 		secret:                         secret,
 		redirectURIs:                   redirectURIs,
+		postLogoutRedirectURIs:         []string{"http://localhost:9999/logged-out"},
 		applicationType:                op.ApplicationTypeWeb,
 		authMethod:                     oidc.AuthMethodBasic,
 		loginURL:                       defaultLoginURL,
